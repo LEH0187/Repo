@@ -1,0 +1,10 @@
+/.ignore
+/.vscode
+/Binaries
+/Config
+/Content
+/DerivedDataCache
+/Intermediate
+/Saved
+/Shader
+/Test2.uproject
