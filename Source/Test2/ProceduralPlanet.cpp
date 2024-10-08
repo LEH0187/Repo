@@ -48,7 +48,6 @@ void AProceduralPlanet::Tick(float deltaTime)
     if(bCompleteCreateInitialMesh)
     {
         UpdateLOD();
-        //DrawDebugPoint(GetWorld(), QuadRoot[0]->Children[0]->Children[0]->Children[0]->QuadCenter, 10.f, FColor::Red, false);
     }
 }
 
