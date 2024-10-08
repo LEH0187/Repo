@@ -48,6 +48,7 @@ void AProceduralPlanet::Tick(float deltaTime)
     if(bCompleteCreateInitialMesh)
     {
         UpdateLOD();
+        //DrawDebugPoint(GetWorld(), QuadRoot[0]->Children[0]->Children[0]->Children[0]->QuadCenter, 10.f, FColor::Red, false);
     }
 }
 
@@ -133,21 +134,25 @@ void AProceduralPlanet::SubdividePannel(FQuad& QuadTree, int32 MaxDepth, int32 C
     QuadTree.Children[0] = MakeUnique<FQuad>();
     QuadTree.Children[0]->Parent = &QuadTree;
     QuadTree.Children[0]->Quad = {V1, M1, Center, M4};
+    QuadTree.Children[0]->QuadCenter = ((V1+M1+Center+M4) * 0.25f).GetSafeNormal() * Radius;
     SubdividePannel(*QuadTree.Children[0], MaxDepth, CurrentDepth+1);
 
     QuadTree.Children[1] = MakeUnique<FQuad>();
     QuadTree.Children[1]->Parent = &QuadTree;
     QuadTree.Children[1]->Quad = {M1, V2, M2, Center};
+    QuadTree.Children[1]->QuadCenter = ((M1+V2+M2+Center) * 0.25f).GetSafeNormal() * Radius;
     SubdividePannel(*QuadTree.Children[1], MaxDepth, CurrentDepth+1);
-
+    
     QuadTree.Children[2] = MakeUnique<FQuad>();
     QuadTree.Children[2]->Parent = &QuadTree;
     QuadTree.Children[2]->Quad = {Center, M2, V3, M3};
+    QuadTree.Children[2]->QuadCenter = ((Center+ M2+ V3+ M3) * 0.25f).GetSafeNormal() * Radius;
     SubdividePannel(*QuadTree.Children[2], MaxDepth, CurrentDepth+1);
 
     QuadTree.Children[3] = MakeUnique<FQuad>();
     QuadTree.Children[3]->Parent = &QuadTree;
     QuadTree.Children[3]->Quad = {M4, Center, M3, V4};
+    QuadTree.Children[3]->QuadCenter = ((M4+ Center+ M3+ V4) * 0.25f).GetSafeNormal() * Radius;
     SubdividePannel(*QuadTree.Children[3], MaxDepth, CurrentDepth+1);
 }
 
@@ -254,7 +259,7 @@ void AProceduralPlanet::UpdateLOD()
         {
             Async(EAsyncExecution::LargeThreadPool, [this, i, L]{
                 FScopeLock Lock(&Mutex);
-                UpdateLODReculsive(*QuadRoot[i], L, this->Vertices, this->Triangles, 6);
+                UpdateLODReculsive(*QuadRoot[i], L, this->Vertices, this->Triangles, 17);
 
                 
                 AsyncTask(ENamedThreads::GameThread, [this]{
@@ -275,9 +280,12 @@ void AProceduralPlanet::UpdateLOD()
 void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArray<FVector>& UpdateVertices, FJsonSerializableArrayInt& UpdateTriangles, int32 MaxDepth, int32 CurrentDepth)
 {
     float Dist2Quad = FVector::Dist(CameraLoc, Quad.QuadCenter);
-    float BaseDistance = 6371000.0f *3;
+    // AsyncTask(ENamedThreads::GameThread, [this,&Quad]{
+    //                 DrawDebugPoint(GetWorld(), Quad.QuadCenter, 10.f, FColor::Red, false);
+    //             });
+    float BaseDistance = 6371000.0f * 2;
     float Threshold = BaseDistance / FMath::Pow(1.63f, CurrentDepth); //////CurrentDepth Power [[[[1.63]]]]
-    //UE_LOG(LogTemp, Log, TEXT("Dist2Quad:%f / Threshold:%f"), Dist2Quad, Threshold);
+    //UE_LOG(LogTemp, Log, TEXT("Dist2Quad:%f / Threshold:%f QuadCenter:%s"), Dist2Quad, Threshold, *Quad.QuadCenter.ToString());
     if(CurrentDepth < MaxDepth && Dist2Quad < Threshold)
     {
         for(int32 i = 0; i < 4; ++i)
