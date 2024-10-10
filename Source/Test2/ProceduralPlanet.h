@@ -40,8 +40,7 @@ public:
     struct FQuad
     {
         TArray<FVector> Quad;
-        FJsonSerializableArrayInt Triangles;
-        TArray<TUniquePtr<FQuad>> Children;
+        TArray<TSharedPtr<FQuad>> Children;
         FQuad* Parent;
         FVector QuadCenter;
 
@@ -55,14 +54,22 @@ public:
     };
 
 public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ProceduralPlanetProperty")
     float Radius;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ProceduralPlanetProperty")
+    int32 RunTimeMaxSubdivsionLevel;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ProceduralPlanetProperty")
+    int32 PreComputedSubdivisionLevel;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ProceduralPlanetProperty")
+    int32 RenderFaces;
 
 protected:    
 
     void SetupQuadTree();
     void ClearQuadTree(FQuad* Quad);
+
     void SubdividePannel(FQuad& QuadTree, int32 MaxDepth, int32 CurrentDepth = 0);
+    float getMorphValue(float dist, float low, float high);
     int32 AddUniqueVertex(const FVector& Vertex, TMap<FVector, int32>& VertexMap, TArray<FVector>& OutVertices);
     void DrawMesh();
     ////Mesh section config
@@ -74,12 +81,10 @@ protected:
     void UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArray<FVector>& UpdateVertices, 
                                 FJsonSerializableArrayInt& UpdateTriangles, int32 MaxDepth, int32 CurrentDepth = 0);
 private:
-
-    UPROPERTY(VisibleAnywhere)
     UProceduralMeshComponent*           ProceduralMesh;
     UNoiseGenerator*                    Noise;
     TMap<FVector, int32>                VertexMap;
-    TUniquePtr<FQuad>                   QuadRoot[6];
+    TSharedPtr<FQuad>                   QuadRoot[6];
 
     APlayerCameraManager*               C;
     bool                                bCompleteCreateInitialMesh;
@@ -92,4 +97,7 @@ private:
     TArray<FVector>                     Normals;
     TArray<FVector2D>                   UVs;
     TArray<FProcMeshTangent>            Tangents;
+
+    int32 PrecomputedThreadCompleteNum;
+    int32 RuntimeThreadCompleteNum;
 };
