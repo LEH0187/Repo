@@ -80,6 +80,10 @@ protected:
     void UpdateLOD();
     void UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArray<FVector>& UpdateVertices, 
                                 FJsonSerializableArrayInt& UpdateTriangles, int32 MaxDepth, int32 CurrentDepth = 0);
+    void GetTJunctionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TMap<int32, int32>& TJunctionPointsMap);
+    void InterpolateTJuncionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TMap<int32, int32>& TJunctionPointsMap);
+    void MoveVerticesSquareLocationToSphereLocation(TArray<FVector>& _Vertices);
+
 private:
     UProceduralMeshComponent*           ProceduralMesh;
     UNoiseGenerator*                    Noise;
