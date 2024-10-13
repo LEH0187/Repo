@@ -72,17 +72,19 @@ protected:
     float getMorphValue(float dist, float low, float high);
     int32 AddUniqueVertex(const FVector& Vertex, TMap<FVector, int32>& VertexMap, TArray<FVector>& OutVertices);
     void DrawMesh();
-    ////Mesh section config
+    
     void CalculateNormals(TArray<FVector>& _Vertices, TArray<int32>& _Triangles, TArray<FVector>& _Normals);
     void CalculateUVs(TArray<FVector>& _Vertices, TArray<FVector2D>& UVs);
     void CalculateTangents(TArray<FVector>& _Vertices, TArray<FProcMeshTangent>& _Tangents);
+    void CalculateNoise(TArray<FVector>& _Vertices);
 
     void UpdateLOD();
     void UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArray<FVector>& UpdateVertices, 
                                 FJsonSerializableArrayInt& UpdateTriangles, int32 MaxDepth, int32 CurrentDepth = 0);
-    void GetTJunctionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TMap<int32, int32>& TJunctionPointsMap);
-    void InterpolateTJuncionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TMap<int32, int32>& TJunctionPointsMap);
-    void MoveVerticesSquareLocationToSphereLocation(TArray<FVector>& _Vertices);
+    void GetTJunctionPoints(TArray<FVector> &_Vertices, FJsonSerializableArrayInt &_Triangles, TArray<TTuple<int32, int32>> &_TJunctionPointsTupleMap);
+    void NewFunction(TArray<TPair<int32, int32>> &CrackVert);
+    void InterpolateTJuncionPoints(TArray<FVector> &_Vertices, TArray<TTuple<int32, int32>> &_TJunctionPointsTupleMap);
+    void MoveVerticesSquareLocationToSphereLocation(TArray<FVector> &_Vertices);
 
 private:
     UProceduralMeshComponent*           ProceduralMesh;

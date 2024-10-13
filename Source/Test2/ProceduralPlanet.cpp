@@ -263,6 +263,14 @@ void AProceduralPlanet::CalculateTangents(TArray<FVector>& _Vertices, TArray<FPr
     }
 }
 
+void AProceduralPlanet::CalculateNoise(TArray<FVector>& _Vertices)
+{
+    for(int32 i = 0; i < _Vertices.Num(); ++i)
+    {
+        _Vertices[i].Z += Noise->GetGroundBaseNoise3D(_Vertices[i], 100.f);
+    }
+}
+
 void AProceduralPlanet::UpdateLOD()
 {
     FVector L = C->GetCameraLocation();
@@ -275,15 +283,18 @@ void AProceduralPlanet::UpdateLOD()
     if(FVector::Distance(L, PreviousDist) > 1000.f)
     {    
         PreviousDist = L;
-        TMap<int32, int32> TJunctionPointsMap;
         for(int32 i = 0 ; i < RenderFaces; ++i)
         {
-            Async(EAsyncExecution::LargeThreadPool, [this, i, L, &TJunctionPointsMap]{
+            Async(EAsyncExecution::LargeThreadPool, [this, i, L]{
+
+                TArray<TTuple<int32, int32>> TJunctionPointsTupleMap;
 
                 UpdateLODReculsive(*QuadRoot[i], L, this->Vertices, this->Triangles, RunTimeMaxSubdivsionLevel);
-                GetTJunctionPoints(this->Vertices, this->Triangles, TJunctionPointsMap);
+                //GetTJunctionPoints(this->Vertices, this->Triangles, TJunctionPointsTupleMap);
                 MoveVerticesSquareLocationToSphereLocation(this->Vertices);
-                AsyncTask(ENamedThreads::GameThread, [this]{
+                // InterpolateTJuncionPoints(this->Vertices, TJunctionPointsTupleMap);
+                CalculateNoise(this->Vertices);
+                AsyncTask(ENamedThreads::GameThread, [this, &TJunctionPointsTupleMap]{
                     FScopeLock Lock(&Mutex);
                     RuntimeThreadCompleteNum++;
                     if(RuntimeThreadCompleteNum >= 6)
@@ -349,33 +360,40 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
     return;
 }
 
-void AProceduralPlanet::GetTJunctionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TMap<int32, int32>& TJunctionPointsMap)
+void AProceduralPlanet::GetTJunctionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TArray<TTuple<int32, int32>>& _TJunctionPointsTupleMap)
 {
     /*Start Lock*/
     FScopeLock Lock(&Mutex);
-    TMap<int32, int32> CrackVert;
+    TArray<TTuple<int32, int32>> CrackVert;
     for(int32 i = 0; i < _Triangles.Num()-3; i+=3)
     {
+        if(i >= _Triangles.Num())
+        {
+            break;
+        }
         FVector SphericVert[3]  = {
                 _Vertices[_Triangles[i]],
-                _Vertices[_Triangles[i+2]],
-                _Vertices[_Triangles[i+3]]
+                _Vertices[_Triangles[i+1]],
+                _Vertices[_Triangles[i+2]]
             };
 
         if(VertexMap.Contains((SphericVert[0]+SphericVert[1])*0.5f))
         {
-            CrackVert.Add(_Triangles[0], _Triangles[1]);
+            TTuple<int32, int32> Pair(VertexMap[(SphericVert[0]+SphericVert[1])*0.5f], Triangles[i]);
+            CrackVert.Add(Pair);
         }
         if(VertexMap.Contains((SphericVert[1]+SphericVert[2])*0.5f))
         {   
-            CrackVert.Add(_Triangles[1], _Triangles[2]);
+
+            TTuple<int32, int32> Pair(VertexMap[(SphericVert[1]+SphericVert[2])*0.5f], Triangles[i]+1);
+            CrackVert.Add(Pair);
         }
     }
-    CrackVert = MoveTemp(TJunctionPointsMap);
+    _TJunctionPointsTupleMap = MoveTemp(CrackVert);
     /*End Lock*/
 }
 
-void AProceduralPlanet::InterpolateTJuncionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TMap<int32, int32>& TJunctionPointsMap)
+void AProceduralPlanet::InterpolateTJuncionPoints(TArray<FVector>& _Vertices, TArray<TTuple<int32, int32>>& _TJunctionPointsTupleMap)
 {
     
 }
