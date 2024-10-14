@@ -77,7 +77,7 @@ void AProceduralPlanet::CreateCubeMesh(float NewRadius, int32 NewSubdivideLevel)
             FScopeLock Lock(&Mutex);           
             QuadRoot[i]->QuadCenter =   (Quad[i][0] + Quad[i][1] + Quad[i][2] + Quad[i][3]) * 0.25f;
             QuadRoot[i]->Quad =         {Quad[i][0], Quad[i][1], Quad[i][2], Quad[i][3]};
-
+            QuadRoot[i]->PrecomputedNoise = { GetNoise3D(Quad[i][0]), GetNoise3D(Quad[i][1]), GetNoise3D(Quad[i][2]), GetNoise3D(Quad[i][3]) };
             SubdividePannel(*QuadRoot[i], NewSubdivideLevel);
 
             AsyncTask(ENamedThreads::GameThread, [this]{
@@ -146,31 +146,23 @@ void AProceduralPlanet::SubdividePannel(FQuad& QuadTree, int32 MaxDepth, int32 C
     FVector M4 = (V4 + V1) * 0.5f;
     FVector Center = (V1 + V2 + V3 + V4) * 0.25f;
 
+    FVector Quads[4][4] = {
+        {V1, M1, Center, M4},
+        {M1, V2, M2, Center},
+        {Center, M2, V3, M3},
+        {M4, Center, M3, V4}
+    };
     {/*Start Lock*/
         FScopeLock Lock(&Mutex);
-        QuadTree.Children[0] = MakeShared<FQuad>();
-        QuadTree.Children[0]->Parent = &QuadTree;
-        QuadTree.Children[0]->Quad = {V1, M1, Center, M4};
-        QuadTree.Children[0]->QuadCenter = ((V1+M1+Center+M4) * 0.25f);
-        SubdividePannel(*QuadTree.Children[0], MaxDepth, CurrentDepth+1);
-
-        QuadTree.Children[1] = MakeShared<FQuad>();
-        QuadTree.Children[1]->Parent = &QuadTree;
-        QuadTree.Children[1]->Quad = {M1, V2, M2, Center};
-        QuadTree.Children[1]->QuadCenter = ((M1+V2+M2+Center) * 0.25f);
-        SubdividePannel(*QuadTree.Children[1], MaxDepth, CurrentDepth+1);
-        
-        QuadTree.Children[2] = MakeShared<FQuad>();
-        QuadTree.Children[2]->Parent = &QuadTree;
-        QuadTree.Children[2]->Quad = {Center, M2, V3, M3};
-        QuadTree.Children[2]->QuadCenter = ((Center+ M2+ V3+ M3) * 0.25f);
-        SubdividePannel(*QuadTree.Children[2], MaxDepth, CurrentDepth+1);
-
-        QuadTree.Children[3] = MakeShared<FQuad>();
-        QuadTree.Children[3]->Parent = &QuadTree;
-        QuadTree.Children[3]->Quad = {M4, Center, M3, V4};
-        QuadTree.Children[3]->QuadCenter = ((M4+ Center+ M3+ V4) * 0.25f);
-        SubdividePannel(*QuadTree.Children[3], MaxDepth, CurrentDepth+1);
+        for(int32 i = 0; i < 4; ++i)
+        {
+            QuadTree.Children[i] = MakeShared<FQuad>();
+            QuadTree.Children[i]->Parent = &QuadTree;
+            QuadTree.Children[i]->Quad = {Quads[i][0], Quads[i][1], Quads[i][2], Quads[i][3]};
+            QuadTree.Children[i]->QuadCenter = ((Quads[i][0], Quads[i][1], Quads[i][2], Quads[i][3]) * 0.25f);
+            QuadTree.Children[i]->PrecomputedNoise = { GetNoise3D(Quads[i][0]), GetNoise3D(Quads[i][1]), GetNoise3D(Quads[i][2]), GetNoise3D(Quads[i][3]) };
+            SubdividePannel(*QuadTree.Children[i], MaxDepth, CurrentDepth+1);
+        }
     }/*End Lock*/
 }
 
@@ -263,12 +255,9 @@ void AProceduralPlanet::CalculateTangents(TArray<FVector>& _Vertices, TArray<FPr
     }
 }
 
-void AProceduralPlanet::CalculateNoise(TArray<FVector>& _Vertices)
+float AProceduralPlanet::GetNoise3D(FVector _Point)
 {
-    for(int32 i = 0; i < _Vertices.Num(); ++i)
-    {
-        _Vertices[i].Z += Noise->GetGroundBaseNoise3D(_Vertices[i], 100.f);
-    }
+    return Noise->GetGroundBaseNoise3D(_Point, 100.f);;
 }
 
 void AProceduralPlanet::UpdateLOD()
@@ -283,31 +272,25 @@ void AProceduralPlanet::UpdateLOD()
     if(FVector::Distance(L, PreviousDist) > 1000.f)
     {    
         PreviousDist = L;
-        for(int32 i = 0 ; i < RenderFaces; ++i)
-        {
-            Async(EAsyncExecution::LargeThreadPool, [this, i, L]{
 
-                TArray<TTuple<int32, int32>> TJunctionPointsTupleMap;
+        FGraphEventRef SubdivideAsync;
+        FGraphEventRef RenderAsync;
+        /*SubdivideAsync -> RenderAsync*/
 
+        SubdivideAsync = FFunctionGraphTask::CreateAndDispatchWhenReady([this, L](){
+            for(int32 i = 0 ; i < RenderFaces; ++i)
+            {
                 UpdateLODReculsive(*QuadRoot[i], L, this->Vertices, this->Triangles, RunTimeMaxSubdivsionLevel);
-                //GetTJunctionPoints(this->Vertices, this->Triangles, TJunctionPointsTupleMap);
-                MoveVerticesSquareLocationToSphereLocation(this->Vertices);
-                // InterpolateTJuncionPoints(this->Vertices, TJunctionPointsTupleMap);
-                CalculateNoise(this->Vertices);
-                AsyncTask(ENamedThreads::GameThread, [this, &TJunctionPointsTupleMap]{
-                    FScopeLock Lock(&Mutex);
-                    RuntimeThreadCompleteNum++;
-                    if(RuntimeThreadCompleteNum >= 6)
-                    {
-                        DrawMesh();
-                        RuntimeThreadCompleteNum = 0;
-                        Vertices.Empty();
-                        Triangles.Empty();
-                        VertexMap.Empty();
-                    } 
-                });
-            });
-        }
+            }
+        }, TStatId(), nullptr, ENamedThreads::AnyHiPriThreadHiPriTask);
+        
+        RenderAsync = FFunctionGraphTask::CreateAndDispatchWhenReady([this](){
+            DrawMesh();
+            RuntimeThreadCompleteNum = 0;
+            Vertices.Empty();
+            Triangles.Empty();
+            VertexMap.Empty();
+        }, TStatId(), SubdivideAsync, ENamedThreads::GameThread);
     }
     
 }
@@ -338,15 +321,21 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
     }
     else
     { 
+        TArray<FVector> SphericVert = {
+            Quad.Quad[0].GetSafeNormal() * Radius,
+            Quad.Quad[1].GetSafeNormal() * Radius,
+            Quad.Quad[2].GetSafeNormal() * Radius,
+            Quad.Quad[3].GetSafeNormal() * Radius,
+        };
+
         {/*Start Lock*/
             FScopeLock Lock(&Mutex);
 
-            FVector SphericVert[4]  = {
-                Quad.Quad[0],
-                Quad.Quad[1],
-                Quad.Quad[2],
-                Quad.Quad[3],
-            };
+            SphericVert[0].Z += Quad.PrecomputedNoise[0];
+            SphericVert[1].Z += Quad.PrecomputedNoise[1];
+            SphericVert[2].Z += Quad.PrecomputedNoise[2];
+            SphericVert[3].Z += Quad.PrecomputedNoise[3];
+
             int32 TriIdx0 = AddUniqueVertex(SphericVert[0], VertexMap, UpdateVertices);
             int32 TriIdx1 = AddUniqueVertex(SphericVert[1], VertexMap, UpdateVertices);
             int32 TriIdx2 = AddUniqueVertex(SphericVert[2], VertexMap, UpdateVertices);
@@ -360,50 +349,23 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
     return;
 }
 
-void AProceduralPlanet::GetTJunctionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TArray<TTuple<int32, int32>>& _TJunctionPointsTupleMap)
+void AProceduralPlanet::GetTJunctionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TArray<TTuple<int32, FQuad*>>& _TJunctionPointsTupleMap)
 {
-    /*Start Lock*/
-    FScopeLock Lock(&Mutex);
-    TArray<TTuple<int32, int32>> CrackVert;
-    for(int32 i = 0; i < _Triangles.Num()-3; i+=3)
-    {
-        if(i >= _Triangles.Num())
-        {
-            break;
-        }
-        FVector SphericVert[3]  = {
-                _Vertices[_Triangles[i]],
-                _Vertices[_Triangles[i+1]],
-                _Vertices[_Triangles[i+2]]
-            };
-
-        if(VertexMap.Contains((SphericVert[0]+SphericVert[1])*0.5f))
-        {
-            TTuple<int32, int32> Pair(VertexMap[(SphericVert[0]+SphericVert[1])*0.5f], Triangles[i]);
-            CrackVert.Add(Pair);
-        }
-        if(VertexMap.Contains((SphericVert[1]+SphericVert[2])*0.5f))
-        {   
-
-            TTuple<int32, int32> Pair(VertexMap[(SphericVert[1]+SphericVert[2])*0.5f], Triangles[i]+1);
-            CrackVert.Add(Pair);
-        }
-    }
-    _TJunctionPointsTupleMap = MoveTemp(CrackVert);
-    /*End Lock*/
 }
 
-void AProceduralPlanet::InterpolateTJuncionPoints(TArray<FVector>& _Vertices, TArray<TTuple<int32, int32>>& _TJunctionPointsTupleMap)
+void AProceduralPlanet::InterpolateTJuncionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TArray<TTuple<int32, FQuad*>>& _TJunctionPointsTupleMap)
 {
-    
 }
 
 void AProceduralPlanet::MoveVerticesSquareLocationToSphereLocation(TArray<FVector>& _Vertices)
 {
+    /*Start Lock*/
+    FScopeLock Lock(&Mutex);
     for(int32 i = 0; i < Vertices.Num();++i)
     {
         Vertices[i] = Vertices[i].GetSafeNormal() * Radius;
     }
+    /*End Lock*/
 }
 
 void AProceduralPlanet::ClearQuadTree(FQuad* Quad)
