@@ -127,6 +127,11 @@ void AProceduralPlanet::SubdividePannel(FQuad& QuadTree, int32 MaxDepth, int32 C
     {
         return;   
     }
+
+    if(!&QuadTree)
+    {
+        check(true);
+    }
     
     FVector V1; 
     FVector V2; 
@@ -181,6 +186,16 @@ int32 AProceduralPlanet::AddUniqueVertex(const FVector& Vertex, TMap<FVector, in
 
     /*End Lock*/
     return NewIndex;
+}
+
+void AProceduralPlanet::AddUniqueJunctionMap(const FVector& Point, TTuple<int32, int32>& _PutInValue, TMap<FVector, TTuple<int32, int32>>& _TJunctionMap)
+{
+    FScopeLock Lock(&Mutex);
+    if (_TJunctionMap.Contains(Point))
+    {
+        return;
+    }
+    _TJunctionMap.Add(Point, _PutInValue);
 }
 
 void AProceduralPlanet::DrawMesh()
@@ -257,7 +272,7 @@ void AProceduralPlanet::CalculateTangents(TArray<FVector>& _Vertices, TArray<FPr
 
 float AProceduralPlanet::GetNoise3D(FVector _Point)
 {
-    return Noise->GetGroundBaseNoise3D(_Point, 100.f);;
+    return Noise->GetGroundBaseNoise3D(_Point, 500.f);;
 }
 
 void AProceduralPlanet::UpdateLOD()
@@ -282,7 +297,8 @@ void AProceduralPlanet::UpdateLOD()
             {
                 UpdateLODReculsive(*QuadRoot[i], L, this->Vertices, this->Triangles, RunTimeMaxSubdivsionLevel);
             }
-        }, TStatId(), nullptr, ENamedThreads::AnyHiPriThreadHiPriTask);
+            GetAndFixTJunctionPoints(this->Vertices, this->Triangles, this->DetectJunctionMap);
+        }, TStatId(), nullptr, ENamedThreads::AnyNormalThreadNormalTask);
         
         RenderAsync = FFunctionGraphTask::CreateAndDispatchWhenReady([this](){
             DrawMesh();
@@ -290,6 +306,7 @@ void AProceduralPlanet::UpdateLOD()
             Vertices.Empty();
             Triangles.Empty();
             VertexMap.Empty();
+            DetectJunctionMap.Empty();
         }, TStatId(), SubdivideAsync, ENamedThreads::GameThread);
     }
     
@@ -303,7 +320,7 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
         Dist2Quad = FVector::Dist(CameraLoc, Quad.QuadCenter.GetSafeNormal()*Radius);
     }
 
-    float BaseDistance = Radius*2;
+    float BaseDistance = Radius*3;
     float Threshold = BaseDistance / FMath::Pow(1.63f, CurrentDepth); //////CurrentDepth Power [[[[1.63]]]]
     if(CurrentDepth < MaxDepth && Dist2Quad < Threshold)
     {
@@ -321,53 +338,61 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
     }
     else
     { 
-        TArray<FVector> SphericVert = {
-            Quad.Quad[0].GetSafeNormal() * Radius,
-            Quad.Quad[1].GetSafeNormal() * Radius,
-            Quad.Quad[2].GetSafeNormal() * Radius,
-            Quad.Quad[3].GetSafeNormal() * Radius,
-        };
-
         {/*Start Lock*/
             FScopeLock Lock(&Mutex);
+            TArray<FVector> SphericVert = {
+                Quad.Quad[0].GetSafeNormal() * Radius,
+                Quad.Quad[1].GetSafeNormal() * Radius,
+                Quad.Quad[2].GetSafeNormal() * Radius,
+                Quad.Quad[3].GetSafeNormal() * Radius,
+            };
 
             SphericVert[0].Z += Quad.PrecomputedNoise[0];
             SphericVert[1].Z += Quad.PrecomputedNoise[1];
             SphericVert[2].Z += Quad.PrecomputedNoise[2];
             SphericVert[3].Z += Quad.PrecomputedNoise[3];
 
-            int32 TriIdx0 = AddUniqueVertex(SphericVert[0], VertexMap, UpdateVertices);
-            int32 TriIdx1 = AddUniqueVertex(SphericVert[1], VertexMap, UpdateVertices);
-            int32 TriIdx2 = AddUniqueVertex(SphericVert[2], VertexMap, UpdateVertices);
-            int32 TriIdx3 = AddUniqueVertex(SphericVert[3], VertexMap, UpdateVertices);
+            int32 TriIdx[4];
+            for(int32 i = 0; i < 4; ++i)
+            {
+                TriIdx[i] = AddUniqueVertex(SphericVert[i], VertexMap, UpdateVertices);
+            }
 
-            UpdateTriangles.Add(TriIdx2); UpdateTriangles.Add(TriIdx1); UpdateTriangles.Add(TriIdx0);
-            UpdateTriangles.Add(TriIdx0); UpdateTriangles.Add(TriIdx3); UpdateTriangles.Add(TriIdx2);
+            for(int32 i = 0; i<4; ++i)
+            {
+                FVector point = (Quad.Quad[i] + Quad.Quad[(i+1)%4]) * 0.5f;
+                FVector SphericPoint = point.GetSafeNormal() * Radius;
+                SphericPoint.Z += GetNoise3D(point);
+                
+                TTuple<int32, int32> PutInValue = {TriIdx[i], TriIdx[(i+1)%4]};
+                AddUniqueJunctionMap(SphericPoint, PutInValue, DetectJunctionMap);
+            }
+
+            UpdateTriangles.Add(TriIdx[2]); UpdateTriangles.Add(TriIdx[1]); UpdateTriangles.Add(TriIdx[0]);
+            UpdateTriangles.Add(TriIdx[0]); UpdateTriangles.Add(TriIdx[3]); UpdateTriangles.Add(TriIdx[2]);
         }/*End Lock*/
         return;
     }
     return;
 }
 
-void AProceduralPlanet::GetTJunctionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TArray<TTuple<int32, FQuad*>>& _TJunctionPointsTupleMap)
-{
-}
-
-void AProceduralPlanet::InterpolateTJuncionPoints(TArray<FVector>& _Vertices, FJsonSerializableArrayInt& _Triangles, TArray<TTuple<int32, FQuad*>>& _TJunctionPointsTupleMap)
-{
-}
-
-void AProceduralPlanet::MoveVerticesSquareLocationToSphereLocation(TArray<FVector>& _Vertices)
+void AProceduralPlanet::GetAndFixTJunctionPoints(TArray<FVector>& _Vertices, TArray<int32>& _Triangles, TMap<FVector, TTuple<int32, int32>>& _DetectJunctionMap)
 {
     /*Start Lock*/
     FScopeLock Lock(&Mutex);
-    for(int32 i = 0; i < Vertices.Num();++i)
+    for(int32 i = 0; i < _Vertices.Num(); ++i)
     {
-        Vertices[i] = Vertices[i].GetSafeNormal() * Radius;
+        if(_DetectJunctionMap.Contains(_Vertices[i]))
+        {
+            
+            FVector Left = _Vertices[_DetectJunctionMap[_Vertices[i]].Get<0>()];
+            FVector Right = _Vertices[_DetectJunctionMap[_Vertices[i]].Get<1>()];
+            FVector MidPoint = (Left+Right)*0.5f;
+            _Vertices[i] = MidPoint;
+        }
     }
     /*End Lock*/
 }
-
 void AProceduralPlanet::ClearQuadTree(FQuad* Quad)
 {
     for (int32 i = 0; i < 4; ++i)
@@ -379,11 +404,4 @@ void AProceduralPlanet::ClearQuadTree(FQuad* Quad)
             Quad->Parent = nullptr;
         }
     }
-}
-
-float AProceduralPlanet::getMorphValue(float dist, float low, float high)
-{
-    float delta = high - low;             // LOD 범위 차이
-    float factor = (dist - low) / delta;  // 현재 거리가 LOD 범위 내 어디에 위치하는지 비율 계산
-    return FMath::Clamp(factor / 0.5f - 1.0f, 0.0f, 1.0f);  // 0.0 ~ 1.0 사이 값으로 변환
 }
