@@ -20,6 +20,7 @@ class TEST2_API UNoiseGenerator : public UObject
 public:
 	UNoiseGenerator();
 	float GetGroundBaseNoise3D(float X, float Y, float Z, float Amplitude = 1);
+	float GetGroundBaseNoise3D(FVector Point, float Amplitude = 1);
 
 public:
 	TObjectPtr<UCurveFloat> GroundBaseCurve;

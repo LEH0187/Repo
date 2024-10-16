@@ -21,3 +21,12 @@ float UNoiseGenerator::GetGroundBaseNoise3D(float X, float Y, float Z, float Amp
     }
     return 0.f;
 }
+
+float UNoiseGenerator::GetGroundBaseNoise3D(FVector Point, float Amplitude)
+{
+    if(GroundBaseCurve)
+    {
+        return GroundBaseCurve->GetFloatValue(GroundBaseWrapper->GetNoise3D(Point.X, Point.Y, Point.Z)) * Amplitude;
+    }
+    return 0.f;
+}
