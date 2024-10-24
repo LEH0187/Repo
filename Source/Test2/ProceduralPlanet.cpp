@@ -326,13 +326,15 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
     {
         for(int32 i = 0; i < 4; ++i)
         {
-            {/*Start Lock*/
+            {/*Start Lock*/FQuad* Children;
                 FScopeLock Lock(&Mutex);
-                if(!Quad.Children[i])
+                Children =  = Quad.Children[i];
+            }/*End Lock*/
+                if(!Children)
                 {
                     SubdividePannel(Quad, 1);
                 }
-            }/*End Lock*/
+            
             UpdateLODReculsive(*Quad.Children[i], CameraLoc, UpdateVertices, UpdateTriangles, MaxDepth, CurrentDepth+1);
         }
     }
