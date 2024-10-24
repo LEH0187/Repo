@@ -347,6 +347,7 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
                 Quad.Quad[1].GetSafeNormal() * Radius,
                 Quad.Quad[2].GetSafeNormal() * Radius,
                 Quad.Quad[3].GetSafeNormal() * Radius,
+                Quad.QuadCenter.GetSafeNorma() * Radius
             };
 
             SphericVert[0].Z += Quad.PrecomputedNoise[0];
@@ -364,14 +365,15 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
             {
                 FVector point = (Quad.Quad[i] + Quad.Quad[(i+1)%4]) * 0.5f;
                 FVector SphericPoint = point.GetSafeNormal() * Radius;
-                SphericPoint.Z += GetNoise3D(point);
                 
-                TTuple<int32, int32> PutInValue = {TriIdx[i], TriIdx[(i+1)%4]};
+                TTuple<int32, int32> PutInValue = {TriIdx[4], TriIdx[(i+1)%4]};
                 AddUniqueJunctionMap(SphericPoint, PutInValue, DetectJunctionMap);
             }
 
-            UpdateTriangles.Add(TriIdx[2]); UpdateTriangles.Add(TriIdx[1]); UpdateTriangles.Add(TriIdx[0]);
-            UpdateTriangles.Add(TriIdx[0]); UpdateTriangles.Add(TriIdx[3]); UpdateTriangles.Add(TriIdx[2]);
+             UpdateTriangles.Add(TriIdx[0]); UpdateTriangles.Add(TriIdx[4]); UpdateTriangles.Add(TriIdx[1]);
+            UpdateTriangles.Add(TriIdx[1]); UpdateTriangles.Add(TriIdx[4]); UpdateTriangles.Add(TriIdx[2]);
+            UpdateTriangles.Add(TriIdx[2]); UpdateTriangles.Add(TriIdx[4]); UpdateTriangles.Add(TriIdx[3]);
+            UpdateTriangles.Add(TriIdx[3]); UpdateTriangles.Add(TriIdx[4]); UpdateTriangles.Add(TriIdx[0]);
         }/*End Lock*/
         return;
     }
@@ -387,10 +389,10 @@ void AProceduralPlanet::GetAndFixTJunctionPoints(TArray<FVector>& _Vertices, TAr
         if(_DetectJunctionMap.Contains(_Vertices[i]))
         {
             
-            FVector Left = _Vertices[_DetectJunctionMap[_Vertices[i]].Get<0>()];
-            FVector Right = _Vertices[_DetectJunctionMap[_Vertices[i]].Get<1>()];
-            FVector MidPoint = (Left+Right)*0.5f;
-            _Vertices[i] = MidPoint;
+            FVector second = _Vertices[_DetectJunctionMap[_Vertices[i]].Get<0>()];
+            FVector third = _Vertices[_DetectJunctionMap[_Vertices[i]].Get<1>()];
+
+            _Triangles.Add(_DetectJunctionMap[_Vertices[i]); _Triangles.Add([second); _Triangles.Add(third);
         }
     }
     /*End Lock*/
