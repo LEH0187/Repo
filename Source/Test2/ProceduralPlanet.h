@@ -106,5 +106,4 @@ private:
     TMap<FVector, TTuple<int32, int32>> DetectJunctionMap;             
 
     int32 PrecomputedThreadCompleteNum;
-    int32 RuntimeThreadCompleteNum;
 };

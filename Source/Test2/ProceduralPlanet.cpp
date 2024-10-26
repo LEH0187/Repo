@@ -9,7 +9,6 @@ AProceduralPlanet::AProceduralPlanet()
     Radius = 6371000.f;
     bCompleteCreateInitialMesh = false;
     PrecomputedThreadCompleteNum = 0;
-    RuntimeThreadCompleteNum = 0;
 
     ProceduralMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("GeneratedMesh"));
     RootComponent = ProceduralMesh;
@@ -161,7 +160,7 @@ void AProceduralPlanet::SubdividePannel(FQuad& QuadTree, int32 MaxDepth, int32 C
             QuadTree.Children[i] = MakeShared<FQuad>();
             QuadTree.Children[i]->Parent = &QuadTree;
             QuadTree.Children[i]->Quad = {Quads[i][0], Quads[i][1], Quads[i][2], Quads[i][3]};
-            QuadTree.Children[i]->QuadCenter = ((Quads[i][0], Quads[i][1], Quads[i][2], Quads[i][3]) * 0.25f);
+            QuadTree.Children[i]->QuadCenter = (Quads[i][0] + Quads[i][1] + Quads[i][2] + Quads[i][3]) * 0.25f;
            // QuadTree.Children[i]->PrecomputedNoise = { GetNoise3D(Quads[i][0]), GetNoise3D(Quads[i][1]), GetNoise3D(Quads[i][2]), GetNoise3D(Quads[i][3]) };
             SubdividePannel(*QuadTree.Children[i], MaxDepth, CurrentDepth+1);
         }
@@ -197,6 +196,7 @@ void AProceduralPlanet::AddUniqueJunctionMap(const FVector& Point, TTuple<int32,
 
 void AProceduralPlanet::DrawMesh()
 {
+    FScopeLock Lock(&Mutex);
     ProceduralMesh->ClearAllMeshSections();
     ProceduralMesh->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UVs, TArray<FLinearColor>(), Tangents, true);
 }
@@ -294,16 +294,15 @@ void AProceduralPlanet::UpdateLOD()
                 UpdateLODReculsive(*QuadRoot[i], L, this->Vertices, this->Triangles, RunTimeMaxSubdivsionLevel);
             }
             //GetAndFixTJunctionPoints(this->Vertices, this->Triangles, this->DetectJunctionMap);
+
+            AsyncTask(ENamedThreads::GameThread, [this](){
+                DrawMesh();
+                Vertices.Empty();
+                Triangles.Empty();
+                VertexMap.Empty();
+                DetectJunctionMap.Empty();
+            });
         }, TStatId(), nullptr, ENamedThreads::AnyNormalThreadNormalTask);
-        
-        RenderAsync = FFunctionGraphTask::CreateAndDispatchWhenReady([this](){
-            DrawMesh();
-            RuntimeThreadCompleteNum = 0;
-            Vertices.Empty();
-            Triangles.Empty();
-            VertexMap.Empty();
-            DetectJunctionMap.Empty();
-        }, TStatId(), SubdivideAsync, ENamedThreads::GameThread);
     }
     
 }
@@ -331,6 +330,7 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
             Quad.Quad[1].GetSafeNormal() * Radius,
             Quad.Quad[2].GetSafeNormal() * Radius,
             Quad.Quad[3].GetSafeNormal() * Radius,
+            Quad.QuadCenter.GetSafeNormal() * Radius
         };
 
         // SphericVert[0].Z += Quad.PrecomputedNoise[0];
@@ -338,8 +338,8 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
         // SphericVert[2].Z += Quad.PrecomputedNoise[2];
         // SphericVert[3].Z += Quad.PrecomputedNoise[3];
 
-        int32 TriIdx[4];
-        for(int32 i = 0; i < 4; ++i)
+        int32 TriIdx[5];
+        for(int32 i = 0; i < 5; ++i)
         {
             TriIdx[i] = AddUniqueVertex(SphericVert[i], VertexMap, UpdateVertices);
         }
@@ -356,8 +356,10 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArra
 
         {/*Start Lock*/
             FScopeLock Lock(&Mutex);
-            UpdateTriangles.Add(TriIdx[2]); UpdateTriangles.Add(TriIdx[1]); UpdateTriangles.Add(TriIdx[0]);
-            UpdateTriangles.Add(TriIdx[0]); UpdateTriangles.Add(TriIdx[3]); UpdateTriangles.Add(TriIdx[2]);
+            UpdateTriangles.Add(TriIdx[0]); UpdateTriangles.Add(TriIdx[4]); UpdateTriangles.Add(TriIdx[1]);
+            UpdateTriangles.Add(TriIdx[1]); UpdateTriangles.Add(TriIdx[4]); UpdateTriangles.Add(TriIdx[2]);
+            UpdateTriangles.Add(TriIdx[2]); UpdateTriangles.Add(TriIdx[4]); UpdateTriangles.Add(TriIdx[3]);
+            UpdateTriangles.Add(TriIdx[3]); UpdateTriangles.Add(TriIdx[4]); UpdateTriangles.Add(TriIdx[0]);
         }/*End Lock*/
         return;
     }
