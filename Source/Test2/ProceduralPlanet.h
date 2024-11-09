@@ -3,10 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "ProceduralMeshComponent.h"
-#include "Kismet/GameplayStatics.h"
-#include "Misc/ScopeLock.h"
-#include "Engine/World.h"
 #include "NoiseGenerator.h"
+#include "FrustumCulling.h"
 #include "ProceduralPlanet.generated.h"
 
 // 0 : No Debug
@@ -14,6 +12,7 @@
 // 2 : Vertices Num
 #define DEBUG 0
 //#define LOD_MESH_RENDER
+
 
 UCLASS()
 class TEST2_API AProceduralPlanet : public AActor
@@ -54,6 +53,14 @@ public:
         }
     };
 
+    struct FTriangles
+    {
+        int32 i1;
+        int32 i2;
+        int32 i3;
+    };
+    
+
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ProceduralPlanetProperty")
     float Radius;
@@ -72,7 +79,7 @@ protected:
     void SubdividePannel(FQuad& QuadTree, int32 MaxDepth, int32 CurrentDepth = 0);
     float getMorphValue(float dist, float low, float high);
     int32 AddUniqueVertex(const FVector& Vertex, TMap<FVector, int32>& VertexMap, TArray<FVector>& OutVertices);
-    void AddUniqueJunctionMap(const FVector& Point, TTuple<int32, int32>& _PutInValue, TMap<FVector, TTuple<int32, int32>>& _TJunctionMap);
+    void AddUniqueJunctionMap(const FVector& Point, TPair<FVector,FTriangles>& _PutInValue, TMap<FVector, TPair<FVector, FTriangles>>& _TJunctionMap);
     void DrawMesh();
     
     void CalculateNormals(TArray<FVector>& _Vertices, TArray<int32>& _Triangles, TArray<FVector>& _Normals);
@@ -81,10 +88,13 @@ protected:
     float GetNoise3D(FVector _Point);
 
     void UpdateLOD();
-    void UpdateLODReculsive(FQuad& Quad, FVector CameraLoc, TArray<FVector>& UpdateVertices, 
+    void UpdateLODReculsive(FQuad& Quad, FConvexVolume Frustum, FVector CameraLoc, TArray<FVector>& UpdateVertices, 
                                 FJsonSerializableArrayInt& UpdateTriangles, int32 MaxDepth, int32 CurrentDepth = 0);
 
-    void GetAndFixTJunctionPoints(TArray<FVector>& _Vertices, TArray<int32>& _Triangles, TMap<FVector, TTuple<int32, int32>>& _DetectJunctionMap);
+    void GetAndFixTJunctionPoints(TArray<FVector>& _Vertices, TArray<int32>& _Triangles, TMap<FVector, TPair<FVector, FTriangles>>& _DetectJunctionMap);
+
+
+    FConvexVolume GetCameraFrustum();
 private:
     UProceduralMeshComponent*           ProceduralMesh;
     UNoiseGenerator*                    Noise;
@@ -92,6 +102,7 @@ private:
     TSharedPtr<FQuad>                   QuadRoot[6];
 
     APlayerCameraManager*               C;
+    FFrustumCulling                     FrustumCulling;
     bool                                bCompleteCreateInitialMesh;
 
     FCriticalSection                    Mutex;
@@ -103,7 +114,7 @@ private:
     TArray<FVector2D>                   UVs;
     TArray<FProcMeshTangent>            Tangents;
 
-    TMap<FVector, TTuple<int32, int32>> DetectJunctionMap;             
+    TMap<FVector, TPair<FVector, FTriangles>> DetectJunctionMap;             
 
     int32 PrecomputedThreadCompleteNum;
     int32 RuntimeThreadCompleteNum;
