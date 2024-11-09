@@ -117,5 +117,4 @@ private:
     TMap<FVector, TPair<FVector, FTriangles>> DetectJunctionMap;             
 
     int32 PrecomputedThreadCompleteNum;
-    int32 RuntimeThreadCompleteNum;
 };

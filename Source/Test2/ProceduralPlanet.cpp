@@ -18,7 +18,6 @@ AProceduralPlanet::AProceduralPlanet()
     Radius = 6371000.f;
     bCompleteCreateInitialMesh = false;
     PrecomputedThreadCompleteNum = 0;
-    RuntimeThreadCompleteNum = 0;
 
     ProceduralMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("GeneratedMesh"));
     RootComponent = ProceduralMesh;
@@ -84,16 +83,20 @@ void AProceduralPlanet::CreateCubeMesh(float NewRadius, int32 NewSubdivideLevel)
     {
         Async(EAsyncExecution::LargeThreadPool, [this, i ,NewSubdivideLevel, Quad]{     
             FScopeLock Lock(&Mutex);           
-            QuadRoot[i]->QuadCenter =   (Quad[i][0] + Quad[i][1] + Quad[i][2] + Quad[i][3]) * 0.25f;
-            QuadRoot[i]->Quad =         {Quad[i][0], Quad[i][1], Quad[i][2], Quad[i][3]};
-            QuadRoot[i]->PrecomputedNoise = { GetNoise3D(Quad[i][0]), GetNoise3D(Quad[i][1]), GetNoise3D(Quad[i][2]), GetNoise3D(Quad[i][3]) };
+            {
+                QuadRoot[i]->QuadCenter =   (Quad[i][0] + Quad[i][1] + Quad[i][2] + Quad[i][3]) * 0.25f;
+                QuadRoot[i]->Quad =         {Quad[i][0], Quad[i][1], Quad[i][2], Quad[i][3]};
+                //QuadRoot[i]->PrecomputedNoise = { GetNoise3D(Quad[i][0]), GetNoise3D(Quad[i][1]), GetNoise3D(Quad[i][2]), GetNoise3D(Quad[i][3]) };
+            }
             SubdividePannel(*QuadRoot[i], NewSubdivideLevel);
 
             AsyncTask(ENamedThreads::GameThread, [this]{
-                FScopeLock Lock(&Mutex);    
-                PrecomputedThreadCompleteNum++;
-                UE_LOG(LogTemp, Warning, TEXT("Complete Create Cube Mesh / CompleteTasks : %d"), PrecomputedThreadCompleteNum);
-
+                FScopeLock Lock(&Mutex); 
+                {
+                    PrecomputedThreadCompleteNum++;
+                    UE_LOG(LogTemp, Warning, TEXT("Complete Create Cube Mesh / CompleteTasks : %d"), PrecomputedThreadCompleteNum);
+                }
+                
                 if(PrecomputedThreadCompleteNum >= 6)
                 {
                     PrecomputedThreadCompleteNum = 0;
@@ -142,17 +145,10 @@ void AProceduralPlanet::SubdividePannel(FQuad& QuadTree, int32 MaxDepth, int32 C
         check(true);
     }
     
-    FVector V1; 
-    FVector V2; 
-    FVector V3; 
-    FVector V4; 
-    {/*Start Lock*/
-        FScopeLock Lock(&Mutex);
-        V1 = QuadTree.Quad[0];
-        V2 = QuadTree.Quad[1];
-        V3 = QuadTree.Quad[2];
-        V4 = QuadTree.Quad[3];
-    }/*End Lock*/
+    FVector V1 = QuadTree.Quad[0]; 
+    FVector V2 = QuadTree.Quad[1]; 
+    FVector V3 = QuadTree.Quad[2]; 
+    FVector V4 = QuadTree.Quad[3]; 
 
     FVector M1 = (V1 + V2) * 0.5f;
     FVector M2 = (V2 + V3) * 0.5f;
@@ -173,8 +169,8 @@ void AProceduralPlanet::SubdividePannel(FQuad& QuadTree, int32 MaxDepth, int32 C
             QuadTree.Children[i] = MakeShared<FQuad>();
             QuadTree.Children[i]->Parent = &QuadTree;
             QuadTree.Children[i]->Quad = {Quads[i][0], Quads[i][1], Quads[i][2], Quads[i][3]};
-            QuadTree.Children[i]->QuadCenter = ((Quads[i][0], Quads[i][1], Quads[i][2], Quads[i][3]) * 0.25f);
-            QuadTree.Children[i]->PrecomputedNoise = { GetNoise3D(Quads[i][0]), GetNoise3D(Quads[i][1]), GetNoise3D(Quads[i][2]), GetNoise3D(Quads[i][3]) };
+            QuadTree.Children[i]->QuadCenter = (Quads[i][0] + Quads[i][1] + Quads[i][2] + Quads[i][3]) * 0.25f;
+           // QuadTree.Children[i]->PrecomputedNoise = { GetNoise3D(Quads[i][0]), GetNoise3D(Quads[i][1]), GetNoise3D(Quads[i][2]), GetNoise3D(Quads[i][3]) };
             SubdividePannel(*QuadTree.Children[i], MaxDepth, CurrentDepth+1);
         }
     }/*End Lock*/
@@ -210,7 +206,6 @@ void AProceduralPlanet::AddUniqueJunctionMap(const FVector& Point, TPair<FVector
 void AProceduralPlanet::DrawMesh()
 {
     FScopeLock Lock(&Mutex);
-
     ProceduralMesh->ClearAllMeshSections();
     ProceduralMesh->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UVs, TArray<FLinearColor>(), Tangents, true);
 }
@@ -281,7 +276,7 @@ void AProceduralPlanet::CalculateTangents(TArray<FVector>& _Vertices, TArray<FPr
 
 float AProceduralPlanet::GetNoise3D(FVector _Point)
 {
-    return Noise->GetGroundBaseNoise3D(_Point, 500.f);;
+    return Noise->GetGroundBaseNoise3D(_Point, 500.f);
 }
 
 void AProceduralPlanet::UpdateLOD()
@@ -292,9 +287,8 @@ void AProceduralPlanet::UpdateLOD()
 #if DEBUG == 1
     UE_LOG(LogTemp, Warning, TEXT("Dist Camera to SquareCenter %f"), Dist2Player);
 #endif // DEBUG
-    FConvexVolume Frustum = GetCameraFrustum();
-    ///카메라 속도에 따른 동적 거리조정 필요
-    if(FVector::Dist(L, PreviousDist) > 3000.f)
+    
+    if(FVector::Distance(L, PreviousDist) > 1000.f)
     {    
         PreviousDist = L;
         FGraphEventRef SubdivideAsync;
@@ -306,33 +300,41 @@ void AProceduralPlanet::UpdateLOD()
                 UpdateLODReculsive(*QuadRoot[i], Frustum, L, this->Vertices, this->Triangles, RunTimeMaxSubdivsionLevel);
             }
             GetAndFixTJunctionPoints(this->Vertices, this->Triangles, this->DetectJunctionMap);
-
         }, TStatId(), nullptr, ENamedThreads::AnyNormalThreadNormalTask);
         
         RenderAsync = FFunctionGraphTask::CreateAndDispatchWhenReady([this](){
             DrawMesh();
+            RuntimeThreadCompleteNum = 0;
             Vertices.Empty();
             Triangles.Empty();
             VertexMap.Empty();
             DetectJunctionMap.Empty();
-        }, TStatId(), SubdivideAsync, ENamedThreads::GameThread);   
+        }, TStatId(), SubdivideAsync, ENamedThreads::GameThread);
     }
 }
 
 void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FConvexVolume Frustum, FVector CameraLoc, TArray<FVector>& UpdateVertices, FJsonSerializableArrayInt& UpdateTriangles, int32 MaxDepth, int32 CurrentDepth)
 {
-    float Dist2Quad = FVector::Dist(CameraLoc, Quad.QuadCenter.GetSafeNormal()*Radius);
-    float BaseDistance = Radius*2.5f;
+    float Dist2Quad;
+    {
+        FScopeLock Lock(&Mutex);
+        Dist2Quad = FVector::Dist(CameraLoc, Quad.QuadCenter.GetSafeNormal()*Radius);
+    }
+
+    float BaseDistance = Radius*3;
     float Threshold = BaseDistance / FMath::Pow(1.63f, CurrentDepth); //////CurrentDepth Power [[[[1.63]]]]
     if(CurrentDepth < MaxDepth && Dist2Quad < Threshold)
     {
         for(int32 i = 0; i < 4; ++i)
         {
-            if(!Quad.Children[i])
-            {
-                SubdividePannel(Quad, 1);
-            }
-            UpdateLODReculsive(*Quad.Children[i], Frustum, CameraLoc, UpdateVertices, UpdateTriangles, MaxDepth, CurrentDepth+1);
+            {/*Start Lock*/
+                FScopeLock Lock(&Mutex);
+                if(!Quad.Children[i])
+                {
+                    SubdividePannel(Quad, 1);
+                }
+            }/*End Lock*/
+            UpdateLODReculsive(*Quad.Children[i], CameraLoc, UpdateVertices, UpdateTriangles, MaxDepth, CurrentDepth+1);
         }
     }
     else
@@ -340,34 +342,36 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FConvexVolume Frustum, F
         {/*Start Lock*/
             FScopeLock Lock(&Mutex);
             TArray<FVector> SphericVert = {
-            Quad.Quad[0].GetSafeNormal() * Radius,
-            Quad.Quad[1].GetSafeNormal() * Radius,
-            Quad.Quad[2].GetSafeNormal() * Radius,
-            Quad.Quad[3].GetSafeNormal() * Radius,
-            Quad.QuadCenter.GetSafeNormal() * Radius
-        };
-        // SphericVert[0].Z += Quad.PrecomputedNoise[0];
-        // SphericVert[1].Z += Quad.PrecomputedNoise[1];
-        // SphericVert[2].Z += Quad.PrecomputedNoise[2];
-        // SphericVert[3].Z += Quad.PrecomputedNoise[3];
+                Quad.Quad[0].GetSafeNormal() * Radius,
+                Quad.Quad[1].GetSafeNormal() * Radius,
+                Quad.Quad[2].GetSafeNormal() * Radius,
+                Quad.Quad[3].GetSafeNormal() * Radius,
+            };
 
-        int32 TriIdx[5];
-        for(int32 i = 0; i < 5; ++i)
-        {
-            TriIdx[i] = AddUniqueVertex(SphericVert[i], VertexMap, UpdateVertices);
-        }
+            SphericVert[0].Z += Quad.PrecomputedNoise[0];
+            SphericVert[1].Z += Quad.PrecomputedNoise[1];
+            SphericVert[2].Z += Quad.PrecomputedNoise[2];
+            SphericVert[3].Z += Quad.PrecomputedNoise[3];
+
+            int32 TriIdx[4];
+            for(int32 i = 0; i < 4; ++i)
+            {
+                TriIdx[i] = AddUniqueVertex(SphericVert[i], VertexMap, UpdateVertices);
+            }
+
+            for(int32 i = 0; i<4; ++i)
+            {
+                FVector point = (Quad.Quad[i] + Quad.Quad[(i+1)%4]) * 0.5f;
+                FVector SphericPoint = point.GetSafeNormal() * Radius;
+                SphericPoint.Z += GetNoise3D(point);
+                
+                TTuple<int32, int32> PutInValue = {TriIdx[i], TriIdx[(i+1)%4]};
+                AddUniqueJunctionMap(SphericPoint, PutInValue, DetectJunctionMap);
+            }
+
+            UpdateTriangles.Add(TriIdx[2]); UpdateTriangles.Add(TriIdx[1]); UpdateTriangles.Add(TriIdx[0]);
+            UpdateTriangles.Add(TriIdx[0]); UpdateTriangles.Add(TriIdx[3]); UpdateTriangles.Add(TriIdx[2]);
         }/*End Lock*/
-
-        for(int32 i = 0; i<4; ++i)
-        {
-            FVector point = (Quad.Quad[i] + Quad.Quad[(i+1)%4]) * 0.5f;
-            FVector SphericPoint = point.GetSafeNormal() * Radius;
-            
-            int32 currentIdx = UpdateTriangles.Num()-(12 - (i*3));
-            FTriangles T= {currentIdx, currentIdx+1, currentIdx+2};
-            TPair pair = TPair<FVector, FTriangles>(SphericPoint, T);
-            AddUniqueJunctionMap(SphericPoint, pair, DetectJunctionMap);
-        }
         return;
     }
     return;
