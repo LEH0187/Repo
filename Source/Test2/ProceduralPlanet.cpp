@@ -340,37 +340,9 @@ void AProceduralPlanet::UpdateLODReculsive(FQuad& Quad, FConvexVolume Frustum, F
             Quad.Quad[3].GetSafeNormal() * Radius,
             Quad.QuadCenter.GetSafeNormal() * Radius
         };
-
-        // SphericVert[0].Z += Quad.PrecomputedNoise[0];
-        // SphericVert[1].Z += Quad.PrecomputedNoise[1];
-        // SphericVert[2].Z += Quad.PrecomputedNoise[2];
-        // SphericVert[3].Z += Quad.PrecomputedNoise[3];
-
-        int32 TriIdx[5];
-        for(int32 i = 0; i < 5; ++i)
-        {
-            TriIdx[i] = AddUniqueVertex(SphericVert[i], VertexMap, UpdateVertices);
-        }
-        
-        // for(int32 i = 0; i<4; ++i)
-        // {
-        //     FVector point = (Quad.Quad[i] + Quad.Quad[(i+1)%4]) * 0.5f;
-        //     FVector SphericPoint = point.GetSafeNormal() * Radius;
-        //     SphericPoint.Z += GetNoise3D(point);
-            
-        //     TTuple<int32, int32> PutInValue = {TriIdx[i], TriIdx[(i+1)%4]};
-        //     AddUniqueJunctionMap(SphericPoint, PutInValue, DetectJunctionMap);
-        // }
-
         {/*Start Lock*/
             FScopeLock Lock(&Mutex);
-            TArray<FVector> SphericVert = {
-                Quad.Quad[0].GetSafeNormal() * Radius,
-                Quad.Quad[1].GetSafeNormal() * Radius,
-                Quad.Quad[2].GetSafeNormal() * Radius,
-                Quad.Quad[3].GetSafeNormal() * Radius,
-                Quad.QuadCenter.GetSafeNormal() * Radius
-            };
+            
             // SphericVert[0].Z += Quad.PrecomputedNoise[0];
             // SphericVert[1].Z += Quad.PrecomputedNoise[1];
             // SphericVert[2].Z += Quad.PrecomputedNoise[2];
@@ -413,21 +385,20 @@ void AProceduralPlanet::GetAndFixTJunctionPoints(TArray<FVector>& _Vertices, TAr
 
             /*Start Lock*/
             FScopeLock Lock(&Mutex);
+            {
+                int32 TJIdx = AddUniqueVertex(JunctionPoint, VertexMap, _Vertices);
+                int32 Idx2 = _Triangles[JunctionTriangles.i2];
+                int32 Idx3 = _Triangles[JunctionTriangles.i3];
+    
+                _Triangles.Add(TJIdx); 
+                _Triangles.Add(Idx2); 
+                _Triangles.Add(Idx3); 
+                _Triangles[JunctionTriangles.i3] = TJIdx;
+            }
+            /*End Lock*/
 
-            int32 TJIdx = AddUniqueVertex(JunctionPoint, VertexMap, _Vertices);
-            int32 Idx2 = _Triangles[JunctionTriangles.i2];
-            int32 Idx3 = _Triangles[JunctionTriangles.i3];
-            // AsyncTask(ENamedThreads::GameThread, [this, _Triangles, JunctionTriangles, _Vertices, TJIdx]{
-            //     DrawDebugPoint(GetWorld(), _Vertices[_Triangles[JunctionTriangles.i1]], 10.f, FColor::Red, true);
-            // });
-            
-            _Triangles.Add(TJIdx); 
-            _Triangles.Add(Idx2); 
-            _Triangles.Add(Idx3); 
-            _Triangles[JunctionTriangles.i3] = TJIdx;
         }
     }
-    /*End Lock*/
 }
 void AProceduralPlanet::ClearQuadTree(FQuad* Quad)
 {
