@@ -8,6 +8,10 @@ public class Test2 : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		PublicIncludePaths.AddRange(new string[] {
+			"Test2"
+		});
+
 		PublicDependencyModuleNames.AddRange(new string[] { 
 			"Core",
 			"CoreUObject",

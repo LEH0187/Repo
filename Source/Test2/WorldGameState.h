@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
-#include "ProceduralPlanet.h"
+#include "Test2/Procedural/ProceduralPlanet.h"
 #include "WorldGameState.generated.h"
 
 /**
