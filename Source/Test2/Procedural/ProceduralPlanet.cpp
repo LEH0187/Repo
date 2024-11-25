@@ -14,7 +14,7 @@ AProceduralPlanet::AProceduralPlanet()
 void AProceduralPlanet::BeginPlay()
 {
     Super::BeginPlay(); 
-    GeometryControl->Initialize(6371000.f, 14, 9);
+    GeometryControl->Initialize(6371000.f, 14, 10);
 }
 
 void AProceduralPlanet::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -30,15 +30,15 @@ void AProceduralPlanet::Tick(float deltaTime)
     {        
         FGraphEventRef LODEvent = FFunctionGraphTask::CreateAndDispatchWhenReady([this](){
             FGraphEventRef& ref = GeometryControl->UpdateLOD();
-            if(ref.IsValid() && GeometryControl->UpdateLOD()->IsComplete())
+            if(ref.IsValid() && ref->IsComplete())
             {
-                ref = nullptr;
                 AsyncTask(ENamedThreads::GameThread, [this]{
                     FMeshDrawProperties MDP;
                     MDP.Verties     = GeometryControl->GetVertices();
                     MDP.Triangles   = GeometryControl->GetTriangles();
                     DrawMesh(MDP);
                 });
+                ref = nullptr;
             }
         },TStatId(), nullptr, ENamedThreads::AnyNormalThreadNormalTask);       
     }

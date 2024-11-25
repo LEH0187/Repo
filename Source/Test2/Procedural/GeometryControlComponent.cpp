@@ -207,9 +207,10 @@ FGraphEventRef& UGeometryControlComponent::UpdateLOD()
     FConvexVolume Frustum;// = GetCameraFrustum();
 
     ///카메라 속도에 따른 동적 거리조정 필요
-    if(FVector::Distance(L, PreviousDist) > 1000.f)
+    if(FVector::Distance(L, PreviousDist) > 1000.f && !SubdivideAsync.IsValid())
     {   
         PreviousDist = L;
+
         SubdivideAsync = FFunctionGraphTask::CreateAndDispatchWhenReady([this, L, Frustum](){
             for(int32 i = 0 ; i < 24; ++i)
             {
