@@ -10,6 +10,9 @@ UProcMeshSurfacePropertyComponent::UProcMeshSurfacePropertyComponent()
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
 
+	Normals = TArray<FVector>();
+	UVs = TArray<FVector2D>();
+	Tangents = TArray<FProcMeshTangent>();
 	// ...
 }
 

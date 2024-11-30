@@ -7,15 +7,6 @@
 #include "GeometryControlComponent.h"
 #include "ProceduralPlanet.generated.h"
 
-struct FMeshDrawProperties
-{
-    TArray<FVector> Verties                 = TArray<FVector>();
-    FJsonSerializableArrayInt Triangles     = FJsonSerializableArrayInt();
-    TArray<FVector> Normals                 = TArray<FVector>();
-    TArray<FVector2D> UVs                   = TArray<FVector2D>();
-    TArray<FProcMeshTangent> Tangents       = TArray<FProcMeshTangent>();
-};
-
 UCLASS()
 class TEST2_API AProceduralPlanet : public AActor
 {
@@ -31,7 +22,7 @@ public:
     virtual void Tick(float deltaTime) override;    
 
 protected:    
-    void DrawMesh(FMeshDrawProperties MeshProperties);
+    void DrawMesh();
     void UpdateProcMeshSurface();
 
 private:

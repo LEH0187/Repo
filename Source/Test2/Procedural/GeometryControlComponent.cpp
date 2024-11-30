@@ -7,8 +7,10 @@ UGeometryControlComponent::UGeometryControlComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	bCreatedInitialMesh = false;
+    bCompleteUpdateLODReculsiveAll = false;
     StopAsyncTask = false;
     bEndPlay = false;
+
 	ProceduralMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("GeneratedMesh"));
 
 
@@ -139,10 +141,10 @@ void UGeometryControlComponent::SubdividePannel(FQuad& QuadTree, int32 MaxDepth,
         check(true);
     }
 
-    FVector V1 = QuadTree.Quad[0]; 
-    FVector V2 = QuadTree.Quad[1]; 
-    FVector V3 = QuadTree.Quad[2]; 
-    FVector V4 = QuadTree.Quad[3]; 
+    FVector V1 = QuadTree.Quad[0].GetSafeNormal()*Radius; 
+    FVector V2 = QuadTree.Quad[1].GetSafeNormal()*Radius; 
+    FVector V3 = QuadTree.Quad[2].GetSafeNormal()*Radius; 
+    FVector V4 = QuadTree.Quad[3].GetSafeNormal()*Radius; 
 
     FVector M1 = (V1 + V2) * 0.5f;
     FVector M2 = (V2 + V3) * 0.5f;
@@ -199,33 +201,44 @@ void UGeometryControlComponent::AddUniqueJunctionMap(const FVector& Point, TPair
     _TJunctionMap.Add(Point, _PutInValue);
 }
 
-FGraphEventRef& UGeometryControlComponent::UpdateLOD()
+bool& UGeometryControlComponent::UpdateLOD()
 {
     FVector L = C->GetCameraLocation();
     static FVector PreviousDist = L;
+    static int8 CompletedAsyncNum = 0;
 
     FConvexVolume Frustum;// = GetCameraFrustum();
 
     ///카메라 속도에 따른 동적 거리조정 필요
-    if(FVector::Distance(L, PreviousDist) > 1000.f && !SubdivideAsync.IsValid())
+    if(FVector::Distance(L, PreviousDist) > 1000.f && SubdivideAsync.IsEmpty())
     {   
         PreviousDist = L;
-
-        SubdivideAsync = FFunctionGraphTask::CreateAndDispatchWhenReady([this, L, Frustum](){
-            for(int32 i = 0 ; i < 24; ++i)
+        for(int32 i = 0 ; i < 24; ++i)
+        {
+            SubdivideAsync.Add(FFunctionGraphTask::CreateAndDispatchWhenReady([this, L, i, Frustum]()
             {
                 UpdateLODReculsive(*QuadRoot[i], Frustum, L, Vertices, Triangles, RunTimeMaxSubdivsionLevel);
-            }
-            GetAndFixTJunctionPoints(Vertices, Triangles, DetectJunctionMap);
-        }, TStatId(), nullptr, ENamedThreads::BackgroundThreadPriority);    
+                {/*Start Lock*/
+                    FScopeLock Lock(&Mutex);
+                    CompletedAsyncNum++;                
+                    if(CompletedAsyncNum == 24)
+                    {
+                        bCompleteUpdateLODReculsiveAll = true;
+                        CompletedAsyncNum = 0;
+                        SubdivideAsync.Empty();
+                    }
+                }/*End Lock*/
+
+            }, TStatId(), nullptr, ENamedThreads::BackgroundThreadPriority));
+        }
     }
-    return SubdivideAsync;
+    return bCompleteUpdateLODReculsiveAll;
 }
 
 void UGeometryControlComponent::UpdateLODReculsive(FQuad& Quad, FConvexVolume Frustum, FVector CameraLoc, TArray<FVector>& UpdateVertices, FJsonSerializableArrayInt& UpdateTriangles, int32 MaxDepth, int32 CurrentDepth)
 {   
     float Dist2Quad = FVector::Dist(CameraLoc, Quad.QuadCenter.GetSafeNormal()*Radius);
-    float BaseDistance = Radius*2.5f;
+    float BaseDistance = Radius*3.f;
     float Threshold = BaseDistance / FMath::Pow(1.63f, CurrentDepth); //////CurrentDepth Power [[[[1.63]]]]
     if(CurrentDepth < MaxDepth && Dist2Quad < Threshold)
     {
@@ -241,12 +254,13 @@ void UGeometryControlComponent::UpdateLODReculsive(FQuad& Quad, FConvexVolume Fr
     else
     { 
         TArray<FVector> SphericVert = {
-            Quad.Quad[0].GetSafeNormal() * Radius,
-            Quad.Quad[1].GetSafeNormal() * Radius,
-            Quad.Quad[2].GetSafeNormal() * Radius,
-            Quad.Quad[3].GetSafeNormal() * Radius,
-            Quad.QuadCenter.GetSafeNormal() * Radius
+            Quad.Quad[0],
+            Quad.Quad[1],
+            Quad.Quad[2],
+            Quad.Quad[3],
+            Quad.QuadCenter
         };
+        
         {/*Start Lock*/
             FScopeLock Lock(&Mutex);
             
@@ -290,9 +304,9 @@ void UGeometryControlComponent::GetAndFixTJunctionPoints(TArray<FVector>& _Verti
             FVector JunctionPoint = _DetectJunctionMap[_Vertices[i]].Get<0>();
             FTriangles JunctionTriangles = _DetectJunctionMap[_Vertices[i]].Get<1>();
 
-            /*Start Lock*/
-            FScopeLock Lock(&Mutex);
-            {
+            
+            {/*Start Lock*/
+                FScopeLock Lock(&Mutex);
                 int32 TJIdx = AddUniqueVertex(JunctionPoint, VertexMap, _Vertices);
                 int32 Idx2 = _Triangles[JunctionTriangles.i2];
                 int32 Idx3 = _Triangles[JunctionTriangles.i3];

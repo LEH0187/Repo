@@ -48,7 +48,7 @@ public:
 	void Initialize(float Radius, int32 RunTimeMaxSubdivsionLevel, int32 PreComputedSubdivisionLevel);
     void InitializeCubeMeshData();
     void InitializeGeometryData();
-	FGraphEventRef& UpdateLOD();
+	bool& UpdateLOD();
 
 
 	TArray<FVector> GetVertices() const { return Vertices; }
@@ -61,8 +61,11 @@ private:
     void ClearQuadTree(FQuad* Quad);
 
     void Subdivision1x1CubeToPreComputedSubdivisionLevel();
+
     void SubdividePannel(FQuad& QuadTree, int32 MaxDepth, int32 CurrentDepth = 0);
+
     int32 AddUniqueVertex(const FVector& Vertex, TMap<FVector, int32>& VertexMap, TArray<FVector>& OutVertices);
+    
     void AddUniqueJunctionMap(const FVector& Point, TPair<FVector,FTriangles>& _PutInValue, TMap<FVector, TPair<FVector, FTriangles>>& _TJunctionMap);
 
     void UpdateLODReculsive(FQuad& Quad, FConvexVolume Frustum, FVector CameraLoc, TArray<FVector>& UpdateVertices, 
@@ -82,10 +85,12 @@ private:
     APlayerCameraManager*               C;
     FFrustumCulling                     FrustumCulling;
     bool                                bCreatedInitialMesh;
+    bool                                bCompleteUpdateLODReculsiveAll;
+
     bool                                bEndPlay;
 
     FCriticalSection                    Mutex;
-    FGraphEventRef                      SubdivideAsync;
+    TArray<FGraphEventRef>              SubdivideAsync;
     TAtomic<bool>                       StopAsyncTask;
     
 

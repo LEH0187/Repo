@@ -15,7 +15,7 @@ void AProceduralPlanet::BeginPlay()
 {
     Super::BeginPlay(); 
     GeometryControl->Initialize(6371000.f, 14, 10);
-}
+}   
 
 void AProceduralPlanet::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
@@ -29,16 +29,13 @@ void AProceduralPlanet::Tick(float deltaTime)
     if(GeometryControl->IsReadyInitialMesh())
     {        
         FGraphEventRef LODEvent = FFunctionGraphTask::CreateAndDispatchWhenReady([this](){
-            FGraphEventRef& ref = GeometryControl->UpdateLOD();
-            if(ref.IsValid() && ref->IsComplete())
+            bool& ref = GeometryControl->UpdateLOD();
+            if(ref)
             {
                 AsyncTask(ENamedThreads::GameThread, [this]{
-                    FMeshDrawProperties MDP;
-                    MDP.Verties     = GeometryControl->GetVertices();
-                    MDP.Triangles   = GeometryControl->GetTriangles();
-                    DrawMesh(MDP);
+                    DrawMesh();
                 });
-                ref = nullptr;
+                ref = false;
             }
         },TStatId(), nullptr, ENamedThreads::AnyNormalThreadNormalTask);       
     }
@@ -46,11 +43,19 @@ void AProceduralPlanet::Tick(float deltaTime)
 
 
 
-void AProceduralPlanet::DrawMesh(FMeshDrawProperties MeshProperties)
+void AProceduralPlanet::DrawMesh()
 {
     FScopeLock Lock(&Mutex);
-    ProcComp->ClearMeshSection(0);
-    ProcComp->CreateMeshSection_LinearColor(0, MeshProperties.Verties, MeshProperties.Triangles, MeshProperties.Normals, MeshProperties.UVs, TArray<FLinearColor>(),
-                                            MeshProperties.Tangents, true);
+    // ProcComp->ClearAllMeshSections();
+    // ProcComp->CreateMeshSection_LinearColor(
+    //         0,
+    //         GeometryControl->GetVertices(),
+    //         GeometryControl->GetTriangles(),
+    //         /*SurfacePropertyComp->GetNormals()*/TArray<FVector>(),
+    //         /*SurfacePropertyComp->GetUVs()*/TArray<FVector2D>(),
+    //         TArray<FLinearColor>(),
+    //         /*SurfacePropertyComp->GetTangents()*/TArray<FProcMeshTangent>(),
+    //         true
+    //     );
     GeometryControl->InitializeGeometryData();
 }
