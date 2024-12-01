@@ -33,4 +33,10 @@ private:
     UProceduralMeshComponent* ProcComp;
     FCriticalSection Mutex;
 
+public:
+    UPROPERTY(EditAnywhere)
+    int32 RunTimeMaxSubdivsionLevel;
+    UPROPERTY(EditAnywhere)
+    int32 PreComputedSubdivisionLevel;
+
 };

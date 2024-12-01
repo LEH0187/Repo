@@ -12,9 +12,7 @@ UGeometryControlComponent::UGeometryControlComponent()
     bEndPlay = false;
 
 	ProceduralMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("GeneratedMesh"));
-
-
-    
+    FrustumCulling = new FFrustumCulling();
 }
 
 void UGeometryControlComponent::EndPlay(EEndPlayReason::Type EndPlayReason)
@@ -22,6 +20,9 @@ void UGeometryControlComponent::EndPlay(EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
     bEndPlay = true;
     StopAsyncTask = true;
+
+    delete FrustumCulling;
+    FrustumCulling = nullptr;
 }
 
 void UGeometryControlComponent::Initialize(float _Radius, int32 _RunTimeMaxSubdivsionLevel, int32 _PreComputedSubdivisionLevel)
@@ -33,6 +34,7 @@ void UGeometryControlComponent::Initialize(float _Radius, int32 _RunTimeMaxSubdi
     SetupQuadTree();
     InitializeCubeMeshData();
 	Subdivision1x1CubeToPreComputedSubdivisionLevel();
+    FrustumCulling->InitializeInfo(GetWorld());
 }
 
 
@@ -207,11 +209,18 @@ bool& UGeometryControlComponent::UpdateLOD()
     static FVector PreviousDist = L;
     static int8 CompletedAsyncNum = 0;
 
-    FConvexVolume Frustum;// = GetCameraFrustum();
-
     ///카메라 속도에 따른 동적 거리조정 필요
-    if(FVector::Distance(L, PreviousDist) > 1000.f && SubdivideAsync.IsEmpty())
+    if(/*FVector::Distance(L, PreviousDist) > 1000.f && */SubdivideAsync.IsEmpty())
     {   
+        FConvexVolume Frustum;
+        if(FrustumCulling->bCompleteInitializeInfo)
+        {
+            Frustum = FrustumCulling->GetCameraFrustum();
+        }
+        else
+        {
+            Frustum = FConvexVolume();
+        }
         PreviousDist = L;
         for(int32 i = 0 ; i < 24; ++i)
         {
@@ -229,7 +238,7 @@ bool& UGeometryControlComponent::UpdateLOD()
                     }
                 }/*End Lock*/
 
-            }, TStatId(), nullptr, ENamedThreads::BackgroundThreadPriority));
+            }, TStatId(), nullptr, ENamedThreads::AnyNormalThreadNormalTask));
         }
     }
     return bCompleteUpdateLODReculsiveAll;
@@ -237,6 +246,11 @@ bool& UGeometryControlComponent::UpdateLOD()
 
 void UGeometryControlComponent::UpdateLODReculsive(FQuad& Quad, FConvexVolume Frustum, FVector CameraLoc, TArray<FVector>& UpdateVertices, FJsonSerializableArrayInt& UpdateTriangles, int32 MaxDepth, int32 CurrentDepth)
 {   
+    if(!Frustum.IntersectPoint(Quad.Quad[0]) && !Frustum.IntersectPoint(Quad.Quad[1]) && !Frustum.IntersectPoint(Quad.Quad[2]) && !Frustum.IntersectPoint(Quad.Quad[3]))
+    {
+        return;
+    }
+
     float Dist2Quad = FVector::Dist(CameraLoc, Quad.QuadCenter.GetSafeNormal()*Radius);
     float BaseDistance = Radius*3.f;
     float Threshold = BaseDistance / FMath::Pow(1.63f, CurrentDepth); //////CurrentDepth Power [[[[1.63]]]]
@@ -254,11 +268,11 @@ void UGeometryControlComponent::UpdateLODReculsive(FQuad& Quad, FConvexVolume Fr
     else
     { 
         TArray<FVector> SphericVert = {
-            Quad.Quad[0],
-            Quad.Quad[1],
-            Quad.Quad[2],
-            Quad.Quad[3],
-            Quad.QuadCenter
+            Quad.Quad[0].GetSafeNormal() * Radius,
+            Quad.Quad[1].GetSafeNormal() * Radius,
+            Quad.Quad[2].GetSafeNormal() * Radius,
+            Quad.Quad[3].GetSafeNormal() * Radius,
+            Quad.QuadCenter.GetSafeNormal() * Radius
         };
         
         {/*Start Lock*/
@@ -333,39 +347,3 @@ void UGeometryControlComponent::ClearQuadTree(FQuad* Quad)
         }
     }
 }
-
-
-FConvexVolume UGeometryControlComponent::GetCameraFrustum()
-{
-    APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
-    if (!PlayerController)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("not exsite PC"));
-        return FConvexVolume();
-    }
-
-    ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
-    if (LocalPlayer && LocalPlayer->ViewportClient)
-    {
-        FSceneViewFamilyContext ViewFamily(
-            FSceneViewFamily::ConstructionValues(
-                LocalPlayer->ViewportClient->Viewport,
-                GetWorld()->Scene,
-                LocalPlayer->ViewportClient->EngineShowFlags
-            ).SetRealtimeUpdate(true)
-        );
-
-        FVector ViewLocation;
-        FRotator ViewRotation;
-        PlayerController->GetPlayerViewPoint(ViewLocation, ViewRotation);
-
-        FSceneView* SceneView = LocalPlayer->CalcSceneView(&ViewFamily, ViewLocation, ViewRotation, LocalPlayer->ViewportClient->Viewport);
-        if (SceneView)
-        {
-            return SceneView->ViewFrustum;
-        }
-        UE_LOG(LogTemp, Warning, TEXT("Empty FConvexVolume"));
-    }
-    return FConvexVolume(); // 기본 빈 프러스텀 반환
-}
-

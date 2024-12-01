@@ -20,7 +20,10 @@ public class Test2 : ModuleRules
 			"EnhancedInput",
 			"ProceduralMeshComponent",
 			"FastNoise",
-			"FastNoiseGenerator"
+			"FastNoiseGenerator",
+			"RenderCore",  // 렌더링 관련 핵심 모듈
+			"RHI",         // Render Hardware Interface
+			"Renderer"
 		});
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 

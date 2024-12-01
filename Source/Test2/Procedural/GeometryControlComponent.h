@@ -73,8 +73,8 @@ private:
 
     void GetAndFixTJunctionPoints(TArray<FVector>& _Vertices, TArray<int32>& _Triangles, TMap<FVector, TPair<FVector, FTriangles>>& _DetectJunctionMap);
 
-
-    FConvexVolume GetCameraFrustum();
+public:
+    
 
 private:
     UProceduralMeshComponent*           ProceduralMesh;
@@ -83,7 +83,7 @@ private:
     TSharedPtr<FQuad>                   QuadRoot[24];
 
     APlayerCameraManager*               C;
-    FFrustumCulling                     FrustumCulling;
+    FFrustumCulling*                    FrustumCulling;
     bool                                bCreatedInitialMesh;
     bool                                bCompleteUpdateLODReculsiveAll;
 

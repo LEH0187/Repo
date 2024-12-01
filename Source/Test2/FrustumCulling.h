@@ -11,11 +11,17 @@ class TEST2_API FFrustumCulling
 {
 public:
 	FFrustumCulling();
-    void UpdateFrustum(const FMatrix& ProjectionMatrix, const FMatrix& ViewMatrix);
+	~FFrustumCulling();
 
-    bool IsPointInsideFrustum(const FVector& Point) const;
-    bool IsSphereInsideFrustum(const FVector& Center, float Radius) const;
+public:
+    void InitializeInfo(UWorld* _World);
+    FConvexVolume GetCameraFrustum();   
+
+public:
+    bool bCompleteInitializeInfo = false;
 
 private:
-    TArray<FPlane> FrustumPlanes;  // 6개의 평면을 저장할 배열
+    FSceneViewFamilyContext* ViewFamily;
+    APlayerController* PlayerController;
+    ULocalPlayer* LocalPlayer;
 };

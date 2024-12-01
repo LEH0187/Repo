@@ -14,7 +14,7 @@ AProceduralPlanet::AProceduralPlanet()
 void AProceduralPlanet::BeginPlay()
 {
     Super::BeginPlay(); 
-    GeometryControl->Initialize(6371000.f, 14, 10);
+    GeometryControl->Initialize(6371000.f, RunTimeMaxSubdivsionLevel, PreComputedSubdivisionLevel);
 }   
 
 void AProceduralPlanet::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -46,16 +46,16 @@ void AProceduralPlanet::Tick(float deltaTime)
 void AProceduralPlanet::DrawMesh()
 {
     FScopeLock Lock(&Mutex);
-    // ProcComp->ClearAllMeshSections();
-    // ProcComp->CreateMeshSection_LinearColor(
-    //         0,
-    //         GeometryControl->GetVertices(),
-    //         GeometryControl->GetTriangles(),
-    //         /*SurfacePropertyComp->GetNormals()*/TArray<FVector>(),
-    //         /*SurfacePropertyComp->GetUVs()*/TArray<FVector2D>(),
-    //         TArray<FLinearColor>(),
-    //         /*SurfacePropertyComp->GetTangents()*/TArray<FProcMeshTangent>(),
-    //         true
-    //     );
+    ProcComp->ClearAllMeshSections();
+    ProcComp->CreateMeshSection_LinearColor(
+            0,
+            GeometryControl->GetVertices(),
+            GeometryControl->GetTriangles(),
+            /*SurfacePropertyComp->GetNormals()*/TArray<FVector>(),
+            /*SurfacePropertyComp->GetUVs()*/TArray<FVector2D>(),
+            TArray<FLinearColor>(),
+            /*SurfacePropertyComp->GetTangents()*/TArray<FProcMeshTangent>(),
+            true
+        );
     GeometryControl->InitializeGeometryData();
 }
