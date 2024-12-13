@@ -5,6 +5,7 @@
 #include "ProceduralMeshComponent.h"
 #include "ProcMeshSurfacePropertyComponent.h"
 #include "GeometryControlComponent.h"
+#include "Voxel/Voxel.h"
 #include "ProceduralPlanet.generated.h"
 
 UCLASS()
@@ -39,4 +40,5 @@ public:
     UPROPERTY(EditAnywhere)
     int32 PreComputedSubdivisionLevel;
 
+    AVoxel* Voxel;
 };
